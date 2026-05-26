@@ -21,7 +21,11 @@ function formatTime(dateStr) {
 }
 
 function isPast(dateStr) {
-  return new Date(dateStr) < new Date();
+  if (!dateStr) return false;
+  const eventDate = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return eventDate < today;
 }
 
 /* ─── Event Card ──────────────────────────────────────────── */
@@ -330,7 +334,7 @@ function EmptyState({ filtered }) {
    EVENTS PAGE
 ═══════════════════════════════════════════════════════════ */
 export default function Events() {
-  const [events, setEvents] = useState([]);
+  const [events ,setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("upcoming"); // "upcoming" | "past" | "all"
@@ -342,11 +346,13 @@ export default function Events() {
       try {
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, description, event_date, location, event_type")
+          .select("id, title, description, event_date, location")
+          .eq("is_published", true)
           .order("event_date", { ascending: false });
 
         if (error) throw error;
         setEvents(data || []);
+        console.log('events data:', data, 'error:', error);
 
         // Extract unique event types for filter
         const types = [...new Set((data || []).map((e) => e.event_type).filter(Boolean))];
@@ -363,6 +369,7 @@ export default function Events() {
   /* filtered list */
   const filtered = useMemo(() => {
     let list = [...events];
+    console.log('tab:', tab, 'list before filter:', list)
 
     // Tab filter
     if (tab === "upcoming") list = list.filter((e) => !isPast(e.event_date));

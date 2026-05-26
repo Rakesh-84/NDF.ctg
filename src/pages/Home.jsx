@@ -87,6 +87,7 @@ function Navbar({ isScrolled }) {
     { label: "Home", to: "/" },
     { label: "About", to: "/about" },
     { label: "Events", to: "/events" },
+    { label: "Gallery", to: "/gallery" }, 
     { label: "Blog", to: "/blog" },
     { label: "Announcements", to: "/announcements" },
     { label: "Contact", to: "/contact" },
@@ -426,13 +427,17 @@ function HeroSection() {
       <div style={{ textAlign: "center" }}>
         <h1
                   style={{
-         
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 800,
-            fontSize: "clamp(2.6rem, 7vw, 5rem)",
-            lineHeight: 1.5,
-            color: "#111111",
-            margin: 0,
+                    
+            fontFamily: 'Tiro Bangla',
+    fontWeight: 800,
+    fontSize: "clamp(2.6rem, 7vw, 5rem)",
+    lineHeight: 2,        
+    color: "#111111",
+    paddingTop: "1rem",   
+    margin: 0,
+     padding: "0.5rem 0",  
+  overflow: "visible",
+           
           }}
         >
           শোন,{" "}
@@ -442,6 +447,8 @@ function HeroSection() {
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
+              paddingTop: "1rem",
+               overflow: "visible",
             }}
           >
              যুক্তিই আমার সৌন্দর্য
@@ -451,9 +458,10 @@ function HeroSection() {
           style={{
             marginTop: "1.25rem",
             fontSize: "clamp(1rem, 2.5vw, 1.2rem)",
+            fontWeight: 800,
             color: "#555555",
-            fontFamily: "'DM Sans', sans-serif",
-            lineHeight: 1.65,
+            fontFamily: 'Tiro Bangla',
+            lineHeight: 1,
             maxWidth: "580px",
             margin: "1.25rem auto 0",
           }}

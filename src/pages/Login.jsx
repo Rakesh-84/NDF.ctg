@@ -28,6 +28,7 @@ export default function Login() {
       .select('role')
       .eq('id', data.user.id)
       .single()
+      console.log('profile role:', profile)
 
     if (profile?.role === 'admin') {
       navigate('/admin/dashboard')

@@ -1,527 +1,812 @@
-import { useState, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
+import Breadcrumb from "../../components/ui/layout/Breadcrumb";
 
-const CATEGORIES = ["Debate", "Tournament", "Opinion", "News", "Guide"];
-
-function slugify(str) {
-  return str
+function generateSlug(title) {
+  return title
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80);
 }
 
 export default function WritePost() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  const coverInputRef = useRef(null);
 
-  const [form, setForm] = useState({
-    title: "",
-    slug: "",
-    excerpt: "",
-    content: "",
-    category: "Debate",
-    tags: "",
-    status: "draft",
-  });
-
-  const [coverFile, setCoverFile] = useState(null);
-  const [coverPreview, setCoverPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [preview, setPreview] = useState(false);
-  const fileRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  function handleField(key, value) {
-    setForm((f) => {
-      const next = { ...f, [key]: value };
-      if (key === "title" && !f.slug) next.slug = slugify(value);
-      return next;
-    });
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [excerpt, setExcerpt] = useState("");
+  const [body, setBody] = useState("");
+  const [coverImagePath, setCoverImagePath] = useState("");
+  const [coverPreview, setCoverPreview] = useState(null);
+
+  // word count
+  const wordCount = body.trim() === "" ? 0 : body.trim().split(/\s+/).length;
+  const readTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  useEffect(() => {
+    async function fetchPost() {
+      if (!editId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("posts")
+          .select("title, slug, excerpt, body, cover_image_path, status")
+          .eq("id", editId)
+          .eq("author_id", user.id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        if (data) {
+          setTitle(data.title || "");
+          setSlug(data.slug || "");
+          setExcerpt(data.excerpt || "");
+          setBody(data.body || "");
+          setCoverImagePath(data.cover_image_path || "");
+          if (data.cover_image_path) {
+            const { data: urlData } = supabase.storage
+              .from("post-covers")
+              .getPublicUrl(data.cover_image_path);
+            setCoverPreview(urlData.publicUrl);
+          }
+          setSlugManuallyEdited(true); // don't auto-overwrite slug on edit
+        }
+      } catch {
+        setError("Failed to load post. It may not exist or belong to you.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPost();
+  }, [editId, user]);
+
+  // Auto-generate slug from title (only if not manually edited)
+  function handleTitleChange(e) {
+  const newTitle = e.target.value;
+  setTitle(newTitle);
+  if (!slugManuallyEdited) {
+    setSlug(generateSlug(newTitle));
   }
+}
 
-  function handleCover(e) {
+  async function handleCoverChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCoverFile(file);
+
+    if (file.size > 3 * 1024 * 1024) {
+      setError("Cover image must be under 3MB.");
+      return;
+    }
+
     setCoverPreview(URL.createObjectURL(file));
-  }
-
-  async function handleSubmit(statusOverride) {
-    const finalStatus = statusOverride || form.status;
-    setError("");
-    setSuccess("");
-
-    if (!form.title.trim()) { setError("Title is required."); return; }
-    if (!form.content.trim()) { setError("Content cannot be empty."); return; }
-    if (!form.slug.trim()) { setError("Slug is required."); return; }
-
-    setSaving(true);
+    setUploading(true);
+    setError(null);
 
     try {
-      // 1. upload cover if present
-      let cover_image_url = null;
-      if (coverFile) {
-        const ext = coverFile.name.split(".").pop();
-        const path = `covers/${user.id}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("post-covers")
-          .upload(path, coverFile, { upsert: true });
-        if (upErr) throw upErr;
-        const { data: urlData } = supabase.storage.from("post-covers").getPublicUrl(path);
-        cover_image_url = urlData.publicUrl;
+      const ext = file.name.split(".").pop();
+      const filePath = `${user.id}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("post-covers")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      setCoverImagePath(filePath);
+    } catch {
+      setError("Cover upload failed. Try again.");
+      setCoverPreview(null);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeCover() {
+    setCoverImagePath("");
+    setCoverPreview(null);
+    if (coverInputRef.current) coverInputRef.current.value = "";
+  }
+
+  async function handleSubmit(status) {
+    if (!title.trim()) { setError("Title is required."); return; }
+    if (!slug.trim()) { setError("Slug is required."); return; }
+    if (!body.trim()) { setError("Post body cannot be empty."); return; }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const payload = {
+        title: title.trim(),
+        slug: slug.trim(),
+        excerpt: excerpt.trim(),
+        body: body.trim(),
+        cover_image_path: coverImagePath || null,
+        status,
+        author_id: user.id,
+        updated_at: new Date().toISOString(),
+        ...(status === "published" && { published_at: new Date().toISOString() }),
+      };
+
+      let postError;
+
+      if (editId) {
+        const { error } = await supabase
+          .from("posts")
+          .update(payload)
+          .eq("id", editId)
+          .eq("author_id", user.id);
+        postError = error;
+      } else {
+        const { error } = await supabase
+          .from("posts")
+          .insert({ ...payload, created_at: new Date().toISOString() });
+        postError = error;
       }
 
-      // 2. build tags array
-      const tags = form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
+      if (postError) throw postError;
 
-      // 3. insert post
-      const { data, error: insErr } = await supabase.from("posts").insert({
-        title: form.title.trim(),
-        slug: form.slug.trim(),
-        excerpt: form.excerpt.trim(),
-        content: form.content.trim(),
-        category: form.category,
-        tags,
-        cover_image_url,
-        author_id: user.id,
-        status: finalStatus,
-        published_at: finalStatus === "published" ? new Date().toISOString() : null,
-      }).select().single();
-
-      if (insErr) throw insErr;
-
-      setSuccess(finalStatus === "published" ? "Post published!" : "Draft saved.");
-      setTimeout(() => {
-        if (finalStatus === "published") navigate(`/blog/${data.slug || data.id}`);
-        else navigate("/member/dashboard");
-      }, 1200);
-    } catch (err) {
-      setError(err.message || "Something went wrong.");
+      setSuccess(status === "published" ? "Post published!" : "Draft saved!");
+      setTimeout(() => navigate("/member/my-posts"), 1200);
+    } catch {
+      setError("Failed to save post. Please try again.");
     } finally {
       setSaving(false);
     }
   }
 
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "linear-gradient(135deg, #FDF8F2, #F5EFE6, #EEF5F1, #FAF3E8, #F0F7F4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              border: "3px solid #E8D5B0",
+              borderTopColor: "#006A4E",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+              margin: "0 auto 12px",
+            }}
+          />
+          <p style={{ color: "#888888", fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}>
+            {editId ? "Loading post…" : "Preparing editor…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #FDF8F2, #F5EFE6, #EEF5F1, #FAF3E8, #F0F7F4)",
+        backgroundSize: "300% 300%",
+        animation: "bgBreathe 14s ease infinite",
+        fontFamily: "'DM Sans', sans-serif",
+        paddingBottom: 120,
+      }}
+    >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,800;1,800&family=DM+Sans:wght@400;500;600&display=swap');
-
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@800&family=DM+Sans:wght@400;500;600&display=swap');
         @keyframes bgBreathe {
-          0%,100% { background-position: 0% 50%; }
-          50%      { background-position: 100% 50%; }
+          0%, 100% { background-position: 0% 50%; }
+          50%       { background-position: 100% 50%; }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp {
-          from { opacity:0; transform:translateY(14px); }
-          to   { opacity:1; transform:translateY(0); }
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        .write-root {
-          min-height: 100vh;
-          font-family: 'DM Sans', sans-serif;
-          background: linear-gradient(135deg,#FDF8F2,#F5EFE6,#EEF5F1,#FAF3E8,#F0F7F4);
-          background-size: 300% 300%;
-          animation: bgBreathe 14s ease infinite;
-          padding-bottom: 120px;
-        }
-        .fraunces { font-family: 'Fraunces', serif; }
-        .card {
-          background: #FFFDF9;
-          border: 1px solid rgba(255,255,255,0.95);
-          box-shadow: 0 4px 20px rgba(180,140,80,0.10);
-          border-radius: 18px;
-          animation: fadeUp .4s ease both;
-        }
-        .field-label {
-          display: block;
-          font-size: 13px;
-          font-weight: 600;
-          color: #555;
-          margin-bottom: 6px;
-          letter-spacing: .02em;
-        }
-        .field-input {
-          width: 100%;
-          padding: 11px 14px;
-          background: #FDFAF6;
-          border: 1.5px solid rgba(180,140,80,0.20);
-          border-radius: 10px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 14px;
-          color: #111;
+        .wp-input:focus {
           outline: none;
-          transition: border-color .2s, box-shadow .2s;
-          box-sizing: border-box;
+          border-color: #006A4E !important;
+          box-shadow: 0 0 0 3px rgba(0,106,78,0.10) !important;
         }
-        .field-input:focus {
-          border-color: #006A4E;
-          box-shadow: 0 0 0 3px rgba(0,106,78,.08);
+        .wp-title-input::placeholder { color: #C8B89A; }
+        .wp-publish-btn:hover:not(:disabled) {
+          background: #005540 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(0,106,78,0.25) !important;
         }
-        textarea.field-input { resize: vertical; min-height: 120px; line-height: 1.6; }
-        .content-area { min-height: 340px; font-size: 15px; line-height: 1.8; }
-
-        .cover-drop {
-          border: 2px dashed rgba(180,140,80,0.30);
-          border-radius: 14px;
-          padding: 32px;
-          text-align: center;
-          cursor: pointer;
-          transition: border-color .2s, background .2s;
-          background: #FDFAF6;
+        .wp-draft-btn:hover:not(:disabled) {
+          border-color: #006A4E !important;
+          color: #006A4E !important;
+          background: rgba(0,106,78,0.04) !important;
         }
-        .cover-drop:hover {
-          border-color: #006A4E;
-          background: rgba(0,106,78,.03);
-        }
-
-        .select-input {
-          width: 100%;
-          padding: 11px 14px;
-          background: #FDFAF6;
-          border: 1.5px solid rgba(180,140,80,0.20);
-          border-radius: 10px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 14px;
-          color: #111;
-          outline: none;
-          cursor: pointer;
-          appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 14px center;
-          transition: border-color .2s;
-        }
-        .select-input:focus { border-color: #006A4E; }
-
-        .btn-primary {
-          padding: 12px 28px;
-          background: #006A4E;
-          color: #fff;
-          border: none;
-          border-radius: 11px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background .18s, transform .18s;
-        }
-        .btn-primary:hover:not(:disabled) { background: #004D38; transform: translateY(-1px); }
-        .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-
-        .btn-secondary {
-          padding: 12px 24px;
-          background: transparent;
-          color: #006A4E;
-          border: 1.5px solid #006A4E;
-          border-radius: 11px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background .18s;
-        }
-        .btn-secondary:hover:not(:disabled) { background: rgba(0,106,78,.06); }
-        .btn-secondary:disabled { opacity:.6; cursor:not-allowed; }
-
-        .btn-ghost {
-          padding: 12px 20px;
-          background: transparent;
-          color: #888;
-          border: 1.5px solid rgba(180,140,80,0.25);
-          border-radius: 11px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: border-color .18s, color .18s;
-        }
-        .btn-ghost:hover:not(:disabled) { color: #555; border-color: #888; }
-
-        .tab-btn {
-          padding: 7px 18px;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          border: none;
-          transition: all .18s;
-        }
-        .tab-btn.active { background: #006A4E; color: #fff; }
-        .tab-btn.inactive { background: transparent; color: #888; }
-        .tab-btn.inactive:hover { color: #555; background: rgba(0,106,78,.05); }
-
-        .alert-error {
-          padding: 12px 16px;
-          background: rgba(212,32,39,.08);
-          border: 1px solid rgba(212,32,39,.20);
-          border-radius: 10px;
-          color: #D42027;
-          font-size: 14px;
-          margin-bottom: 16px;
-        }
-        .alert-success {
-          padding: 12px 16px;
-          background: rgba(0,106,78,.08);
-          border: 1px solid rgba(0,106,78,.20);
-          border-radius: 10px;
-          color: #006A4E;
-          font-size: 14px;
-          margin-bottom: 16px;
-        }
-
-        .toolbar-btn {
-          padding: 5px 10px;
-          background: #EEF5F1;
-          border: 1px solid rgba(0,106,78,.15);
-          border-radius: 6px;
-          font-size: 13px;
-          color: #006A4E;
-          cursor: pointer;
-          font-family: 'DM Sans', sans-serif;
-          font-weight: 500;
-          transition: background .15s;
-        }
-        .toolbar-btn:hover { background: rgba(0,106,78,.15); }
-
-        .char-count { font-size: 11px; color: #aaa; text-align: right; margin-top: 4px; }
-
-        /* preview prose */
-        .prose h1,.prose h2,.prose h3 { font-family:'Fraunces',serif; color:#111; }
-        .prose p { color:#444; font-size:16px; line-height:1.8; margin-bottom:16px; }
-        .prose h1 { font-size:32px; margin-bottom:12px; }
-        .prose h2 { font-size:24px; margin-bottom:10px; margin-top:28px; }
-        .prose h3 { font-size:20px; margin-bottom:8px; margin-top:22px; }
+        .wp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-cover-zone:hover { border-color: #006A4E !important; }
+        .wp-remove-cover:hover { background: #D42027 !important; color: #fff !important; }
+        .wp-slug-badge { transition: background 0.2s; }
       `}</style>
 
-      <div className="write-root">
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "20px 20px 0" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 16px" }}>
 
-          {/* header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <Link to="/member/dashboard" style={{ fontSize: 14, color: "#006A4E", textDecoration: "none", fontWeight: 600 }}>← Dashboard</Link>
-              <h1 className="fraunces" style={{ fontSize: "clamp(24px,4vw,36px)", color: "#111", margin: "8px 0 4px" }}>Write a Post</h1>
-              <p style={{ color: "#888", fontSize: 14, margin: 0 }}>Share your thoughts with the community.</p>
+        {/* Breadcrumb */}
+        <div style={{ paddingTop: 20 }}>
+          <Breadcrumb
+            items={[
+              { label: "Dashboard", href: "/member/dashboard" },
+              { label: "My Posts", href: "/member/my-posts" },
+              { label: editId ? "Edit Post" : "Write Post" },
+            ]}
+          />
+        </div>
+
+        {/* Header */}
+        <div style={{ marginBottom: 24, animation: "fadeUp 0.4s ease both" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontFamily: "'Fraunces', serif",
+                fontWeight: 800,
+                fontSize: "clamp(26px, 6vw, 34px)",
+                background: "linear-gradient(135deg, #006A4E 0%, #1A3A2A 60%, #004D38 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                margin: 0,
+                lineHeight: 1.15,
+              }}
+            >
+              {editId ? "Edit Post" : "Write Post"}
+            </h1>
+            {/* Live stats pill */}
+            {body.trim() && (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "#888888",
+                  background: "#F0EBE0",
+                  padding: "4px 10px",
+                  borderRadius: 20,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {wordCount} words · {readTime} min read
+              </span>
+            )}
+          </div>
+          <p style={{ color: "#888888", fontSize: 14, margin: "6px 0 0" }}>
+            {editId ? "Update your post below" : "Share your thoughts with the community"}
+          </p>
+        </div>
+
+        {/* Feedback banners */}
+        {error && (
+          <div
+            style={{
+              background: "#FFF0F0",
+              border: "1px solid #F5C5C5",
+              borderRadius: 10,
+              padding: "12px 16px",
+              marginBottom: 20,
+              color: "#D42027",
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              animation: "fadeUp 0.3s ease both",
+            }}
+          >
+            <span>⚠️</span> {error}
+          </div>
+        )}
+        {success && (
+          <div
+            style={{
+              background: "#F0FBF6",
+              border: "1px solid #B2E2CE",
+              borderRadius: 10,
+              padding: "12px 16px",
+              marginBottom: 20,
+              color: "#006A4E",
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              animation: "fadeUp 0.3s ease both",
+            }}
+          >
+            <span>✅</span> {success} — redirecting…
+          </div>
+        )}
+
+        {/* Cover image */}
+        <div style={{ marginBottom: 20, animation: "fadeUp 0.4s ease 0.05s both" }}>
+          {coverPreview ? (
+            <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+              <img
+                src={coverPreview}
+                alt="Cover preview"
+                style={{
+                  width: "100%",
+                  height: 220,
+                  objectFit: "cover",
+                  display: "block",
+                }}
+              />
+              {/* Uploading overlay */}
+              {uploading && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(255,253,249,0.75)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      border: "2px solid #E8D5B0",
+                      borderTopColor: "#006A4E",
+                      borderRadius: "50%",
+                      animation: "spin 0.7s linear infinite",
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: "#555555", fontWeight: 500 }}>Uploading…</span>
+                </div>
+              )}
+              {/* Controls overlay */}
+              {!uploading && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 10,
+                    right: 10,
+                    display: "flex",
+                    gap: 8,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    style={{
+                      padding: "6px 14px",
+                      background: "rgba(255,253,249,0.92)",
+                      border: "1px solid #E8D5B0",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#555555",
+                      cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    className="wp-remove-cover"
+                    onClick={removeCover}
+                    style={{
+                      padding: "6px 14px",
+                      background: "rgba(255,253,249,0.92)",
+                      border: "1px solid #F5C5C5",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#D42027",
+                      cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                      transition: "background 0.2s, color 0.2s",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
             </div>
-            {/* edit / preview tabs */}
-            <div style={{ display: "flex", gap: 4, background: "#F5EFE6", borderRadius: 10, padding: 4 }}>
-              <button className={`tab-btn ${!preview ? "active" : "inactive"}`} onClick={() => setPreview(false)}>✏️ Edit</button>
-              <button className={`tab-btn ${preview ? "active" : "inactive"}`} onClick={() => setPreview(true)}>👁 Preview</button>
+          ) : (
+            <div
+              className="wp-cover-zone"
+              onClick={() => coverInputRef.current?.click()}
+              style={{
+                border: "2px dashed #E8D5B0",
+                borderRadius: 14,
+                padding: "32px 20px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: "#FFFDF9",
+                transition: "border-color 0.2s",
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+              <p style={{ margin: "0 0 4px", fontWeight: 600, fontSize: 14, color: "#555555" }}>
+                Add a cover image
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: "#AAAAAA" }}>
+                Click to upload · Max 3MB · JPG, PNG, WebP
+              </p>
+            </div>
+          )}
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleCoverChange}
+          />
+        </div>
+
+        {/* Main editor card */}
+        <div
+          style={{
+            background: "#FFFDF9",
+            border: "1px solid rgba(255,255,255,0.95)",
+            borderRadius: 18,
+            boxShadow: "0 4px 20px rgba(180,140,80,0.10)",
+            padding: "28px 24px",
+            animation: "fadeUp 0.45s ease 0.08s both",
+          }}
+        >
+          {/* Title */}
+          <div style={{ marginBottom: 18 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#555555",
+                marginBottom: 6,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Title <span style={{ color: "#D42027" }}>*</span>
+            </label>
+            <input
+              className="wp-input wp-title-input"
+              type="text"
+              value={title}
+              onChange={handleTitleChange}
+              placeholder="Give your post a great title…"
+              maxLength={200}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                border: "1px solid #E8D5B0",
+                borderRadius: 10,
+                fontSize: 18,
+                fontWeight: 600,
+                fontFamily: "'Fraunces', serif",
+                color: "#111111",
+                background: "#FFFDF9",
+                boxSizing: "border-box",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+            />
+          </div>
+
+          {/* Slug */}
+          <div style={{ marginBottom: 18 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#555555",
+                marginBottom: 6,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Slug <span style={{ color: "#D42027" }}>*</span>
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontSize: 11,
+                  fontWeight: 400,
+                  color: "#888888",
+                  background: "#F0EBE0",
+                  padding: "2px 8px",
+                  borderRadius: 20,
+                }}
+              >
+                auto-generated · editable
+              </span>
+            </label>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                border: "1px solid #E8D5B0",
+                borderRadius: 10,
+                overflow: "hidden",
+                background: "#FFFDF9",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+            >
+              <span
+                style={{
+                  padding: "11px 12px",
+                  fontSize: 13,
+                  color: "#AAAAAA",
+                  background: "#F5F0E8",
+                  borderRight: "1px solid #E8D5B0",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                /blog/
+              </span>
+              <input
+                className="wp-input"
+                type="text"
+                value={slug}
+                onChange={(e) => {
+                  setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"));
+                  setSlugManuallyEdited(true);
+                }}
+                placeholder="post-slug-here"
+                style={{
+                  flex: 1,
+                  padding: "11px 14px",
+                  border: "none",
+                  fontSize: 14,
+                  color: "#111111",
+                  background: "transparent",
+                  fontFamily: "'DM Sans', sans-serif",
+                  outline: "none",
+                }}
+              />
             </div>
           </div>
 
-          {/* alerts */}
-          {error && <div className="alert-error">⚠ {error}</div>}
-          {success && <div className="alert-success">✓ {success}</div>}
+          {/* Excerpt */}
+          <div style={{ marginBottom: 18 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#555555",
+                marginBottom: 6,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Excerpt
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontSize: 11,
+                  fontWeight: 400,
+                  color: "#AAAAAA",
+                }}
+              >
+                shown on blog listing
+              </span>
+            </label>
+            <textarea
+              className="wp-input"
+              value={excerpt}
+              onChange={(e) => setExcerpt(e.target.value)}
+              placeholder="A short summary of your post (1–2 sentences)…"
+              rows={2}
+              maxLength={300}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                border: "1px solid #E8D5B0",
+                borderRadius: 10,
+                fontSize: 14,
+                color: "#111111",
+                background: "#FFFDF9",
+                boxSizing: "border-box",
+                resize: "vertical",
+                fontFamily: "'DM Sans', sans-serif",
+                lineHeight: 1.6,
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+            />
+            <p style={{ fontSize: 12, color: "#AAAAAA", margin: "4px 0 0", textAlign: "right" }}>
+              {excerpt.length} / 300
+            </p>
+          </div>
 
-          {/* ── EDIT MODE ───────────────────────────── */}
-          {!preview && (
-            <div style={{ display: "grid", gap: 20 }}>
+          {/* Divider */}
+          <div
+            style={{
+              height: 1,
+              background: "linear-gradient(90deg, transparent, #E8D5B0, transparent)",
+              margin: "4px 0 20px",
+            }}
+          />
 
-              {/* cover image */}
-              <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">Cover Image</label>
-                {coverPreview ? (
-                  <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", height: 260 }}>
-                    <img src={coverPreview} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    <button
-                      onClick={() => { setCoverFile(null); setCoverPreview(null); }}
-                      style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,.55)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-                    >
-                      ✕ Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="cover-drop" onClick={() => fileRef.current?.click()}>
-                    <input type="file" ref={fileRef} hidden accept="image/*" onChange={handleCover} />
-                    <div style={{ fontSize: 36, marginBottom: 10 }}>🖼</div>
-                    <p style={{ fontSize: 14, color: "#555", margin: 0 }}>Click to upload a cover image</p>
-                    <p style={{ fontSize: 12, color: "#aaa", margin: "4px 0 0" }}>JPG, PNG, WebP · Max 5MB</p>
-                  </div>
-                )}
-              </div>
-
-              {/* title + slug */}
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ marginBottom: 18 }}>
-                  <label className="field-label">Title *</label>
-                  <input
-                    className="field-input"
-                    placeholder="Enter a compelling title…"
-                    value={form.title}
-                    onChange={(e) => handleField("title", e.target.value)}
-                    style={{ fontSize: 18, fontFamily: "'Fraunces',serif", fontWeight: 800 }}
-                  />
-                  <div className="char-count">{form.title.length}/120</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div>
-                    <label className="field-label">Slug (URL)</label>
-                    <input
-                      className="field-input"
-                      placeholder="my-post-slug"
-                      value={form.slug}
-                      onChange={(e) => handleField("slug", slugify(e.target.value))}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Category</label>
-                    <select
-                      className="select-input"
-                      value={form.category}
-                      onChange={(e) => handleField("category", e.target.value)}
-                    >
-                      {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* excerpt */}
-              <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">Excerpt / Summary</label>
-                <textarea
-                  className="field-input"
-                  style={{ minHeight: 80 }}
-                  placeholder="A short description shown in listings…"
-                  value={form.excerpt}
-                  onChange={(e) => handleField("excerpt", e.target.value)}
-                />
-                <div className="char-count">{form.excerpt.length}/300</div>
-              </div>
-
-              {/* content */}
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <label className="field-label" style={{ margin: 0 }}>Content *</label>
-                  {/* quick formatting toolbar */}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {[
-                      { label: "H2", insert: "\n\n## " },
-                      { label: "H3", insert: "\n\n### " },
-                      { label: "**B**", insert: "****" },
-                    ].map((t) => (
-                      <button
-                        key={t.label}
-                        className="toolbar-btn"
-                        dangerouslySetInnerHTML={{ __html: t.label }}
-                        onClick={() => handleField("content", form.content + t.insert)}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <textarea
-                  className="field-input content-area"
-                  placeholder={`Start writing...\n\nUse ## for headings, **bold** for emphasis.\nSeparate paragraphs with blank lines.`}
-                  value={form.content}
-                  onChange={(e) => handleField("content", e.target.value)}
-                />
-                <div className="char-count">{form.content.split(/\s+/).filter(Boolean).length} words</div>
-              </div>
-
-              {/* tags */}
-              <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">Tags (comma-separated)</label>
-                <input
-                  className="field-input"
-                  placeholder="debate, tips, tournament, Chittagong"
-                  value={form.tags}
-                  onChange={(e) => handleField("tags", e.target.value)}
-                />
-                {form.tags && (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    {form.tags.split(",").filter((t) => t.trim()).map((t) => (
-                      <span key={t} style={{ padding: "3px 10px", background: "#EEF5F1", borderRadius: 99, fontSize: 12, color: "#006A4E", fontWeight: 500 }}>
-                        #{t.trim()}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* action buttons */}
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end", paddingBottom: 24 }}>
-                <button className="btn-ghost" onClick={() => navigate("/member/dashboard")} disabled={saving}>
-                  Cancel
-                </button>
-                <button className="btn-secondary" onClick={() => handleSubmit("draft")} disabled={saving}>
-                  {saving ? "Saving…" : "Save Draft"}
-                </button>
-                <button className="btn-primary" onClick={() => handleSubmit("published")} disabled={saving}>
-                  {saving ? "Publishing…" : "🚀 Publish"}
-                </button>
-              </div>
+          {/* Body */}
+          <div style={{ marginBottom: 8 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#555555",
+                marginBottom: 6,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Content <span style={{ color: "#D42027" }}>*</span>
+            </label>
+            <textarea
+              className="wp-input"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Write your post here… Markdown is supported on the public blog."
+              rows={18}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                border: "1px solid #E8D5B0",
+                borderRadius: 10,
+                fontSize: 15,
+                color: "#111111",
+                background: "#FEFCF8",
+                boxSizing: "border-box",
+                resize: "vertical",
+                fontFamily: "'DM Sans', sans-serif",
+                lineHeight: 1.75,
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 6,
+              }}
+            >
+              <p style={{ fontSize: 12, color: "#AAAAAA", margin: 0 }}>
+                Markdown supported
+              </p>
+              <p style={{ fontSize: 12, color: "#AAAAAA", margin: 0 }}>
+                {wordCount} words · ~{readTime} min read
+              </p>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* ── PREVIEW MODE ────────────────────────── */}
-          {preview && (
-            <div className="card" style={{ padding: "clamp(24px,5vw,48px)", animation: "fadeUp .3s ease" }}>
-              {/* cover preview */}
-              {coverPreview && (
-                <div style={{ borderRadius: 14, overflow: "hidden", height: 320, marginBottom: 28 }}>
-                  <img src={coverPreview} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-              )}
-              {/* meta */}
-              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
-                <span style={{ padding: "3px 12px", borderRadius: 99, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", background: "rgba(0,106,78,.10)", color: "#006A4E" }}>
-                  {form.category}
-                </span>
-                <span style={{ fontSize: 12, color: "#888" }}>{new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</span>
-              </div>
-              {/* title */}
-              <h1 className="fraunces" style={{ fontSize: "clamp(24px,4vw,38px)", color: "#111", margin: "0 0 16px", lineHeight: 1.2 }}>
-                {form.title || <span style={{ color: "#ccc" }}>Your title here…</span>}
-              </h1>
-              {/* excerpt */}
-              {form.excerpt && (
-                <p style={{ fontSize: 17, color: "#666", lineHeight: 1.6, borderLeft: "3px solid #006A4E", paddingLeft: 16, margin: "0 0 24px", fontStyle: "italic" }}>
-                  {form.excerpt}
-                </p>
-              )}
-              <div style={{ height: 1, background: "rgba(180,140,80,.12)", marginBottom: 28 }} />
-              {/* content */}
-              <div className="prose">
-                {form.content
-                  ? form.content.split("\n\n").map((block, i) => {
-                      if (block.startsWith("## ")) return <h2 key={i}>{block.slice(3)}</h2>;
-                      if (block.startsWith("# ")) return <h1 key={i}>{block.slice(2)}</h1>;
-                      if (block.startsWith("### ")) return <h3 key={i}>{block.slice(4)}</h3>;
-                      const parts = block.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
-                        part.startsWith("**") ? <strong key={j}>{part.slice(2, -2)}</strong> : part
-                      );
-                      return <p key={i}>{parts}</p>;
-                    })
-                  : <p style={{ color: "#ccc" }}>Your content will appear here…</p>}
-              </div>
-              {/* tags */}
-              {form.tags && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 24, paddingTop: 20, borderTop: "1px solid rgba(180,140,80,.12)" }}>
-                  {form.tags.split(",").filter((t) => t.trim()).map((t) => (
-                    <span key={t} style={{ padding: "4px 12px", background: "#EEF5F1", borderRadius: 99, fontSize: 12, color: "#006A4E", fontWeight: 500 }}>#{t.trim()}</span>
-                  ))}
-                </div>
-              )}
-              {/* back to edit */}
-              <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
-                <button className="btn-ghost" onClick={() => setPreview(false)}>← Back to Editor</button>
-                <button className="btn-primary" onClick={() => handleSubmit("published")} disabled={saving}>
-                  {saving ? "Publishing…" : "🚀 Publish"}
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Action buttons — sticky feel via margin */}
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            flexWrap: "wrap",
+            marginTop: 20,
+            animation: "fadeUp 0.5s ease 0.12s both",
+          }}
+        >
+          <button
+            type="button"
+            className="wp-btn wp-publish-btn"
+            disabled={saving || uploading}
+            onClick={() => handleSubmit("published")}
+            style={{
+              flex: 1,
+              minWidth: 160,
+              padding: "14px 24px",
+              background: "#006A4E",
+              color: "#FFFDF9",
+              border: "none",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 600,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              transition: "background 0.2s, transform 0.15s, box-shadow 0.2s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {saving ? (
+              <>
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    border: "2px solid rgba(255,255,255,0.4)",
+                    borderTopColor: "#fff",
+                    borderRadius: "50%",
+                    animation: "spin 0.7s linear infinite",
+                  }}
+                />
+                Saving…
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 16 }}>🌿</span>
+                {editId ? "Update & Publish" : "Publish Post"}
+              </>
+            )}
+          </button>
 
+          <button
+            type="button"
+            className="wp-btn wp-draft-btn"
+            disabled={saving || uploading}
+            onClick={() => handleSubmit("draft")}
+            style={{
+              flex: 1,
+              minWidth: 140,
+              padding: "14px 24px",
+              background: "transparent",
+              color: "#555555",
+              border: "1px solid #E8D5B0",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              transition: "border-color 0.2s, color 0.2s, background 0.2s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>📝</span>
+            Save as Draft
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/member/my-posts")}
+            style={{
+              padding: "14px 20px",
+              background: "transparent",
+              color: "#AAAAAA",
+              border: "1px solid #E8D5B0",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "#555555"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "#AAAAAA"; }}
+          >
+            Cancel
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

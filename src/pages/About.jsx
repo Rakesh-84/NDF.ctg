@@ -32,12 +32,12 @@ export default function About() {
   ];
 
   const team = [
-    { name: "Jewel Chowdhury", role: "President", initial: "J" },
-    { name: "Nusrat Jahan", role: "Vice President", initial: "N" },
-    { name: "Arif Chowdhury", role: "Training Coordinator", initial: "A" },
-    { name: "Maliha Rahman", role: "Events Director", initial: "M" },
-    { name: "Tahmid Islam", role: "Secretary", initial: "T" },
-    { name: "Priya Das", role: "Treasurer", initial: "P" },
+    { name: "Jewel Chowdhury", role: "President", image: "/public/team/jewel.jpg", initial: "J" },
+    { name: "Avishek Baidya", role: "Vice President", image: "/public/team/abhishek.jpeg", initial: "A" },
+    { name: "Arif Chowdhury", role: "Training Coordinator", image: "/public/team/arif.jpg", initial: "A" },
+    { name: "Maliha Rahman", role: "Events Director", image: "/public/team/maliha.jpg", initial: "M" },
+    { name: "Tahmid Islam", role: "Secretary", image: "/public/team/tahmid.jpg", initial: "T" },
+    { name: "Priya Das", role: "Treasurer", image: "/public/team/priya.jpg", initial: "P" },
   ];
 
   return (
@@ -89,9 +89,20 @@ export default function About() {
           animation: fadeUp .6s ease both;
         }
         @media (max-width: 700px) {
-          .hero-section { grid-template-columns: 1fr; gap: 28px; }
-          .hero-visual { display: none; }
+          .hero-section { grid-template-columns: 1fr;  }
         }
+          @media (max-width: 700px) {
+        .quote-block {
+           padding: 20px 16px;}
+
+         .quote-block::before {
+          font-size: 70px;
+          }
+  .quote-block img {
+    width: 80px;
+    height: 80px;
+  }
+}
 
         /* decorative quote block */
         .quote-block {
@@ -266,7 +277,6 @@ export default function About() {
       `}</style>
 
       <div className="about-root">
-
         {/* ── HERO ─────────────────────────────────────── */}
         <div className="hero-section">
           <div>
@@ -276,19 +286,30 @@ export default function About() {
               style={{
                 fontSize: "clamp(34px,6vw,58px)",
                 lineHeight: 1.12,
-                background: "linear-gradient(135deg,#006A4E 0%,#1A3A2A 60%,#004D38 100%)",
+                background:
+                  "linear-gradient(135deg,#006A4E 0%,#1A3A2A 60%,#004D38 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 margin: "0 0 20px",
               }}
             >
-              Where Words<br />
+              Where Words
+              <br />
               <span className="fraunces-italic">Shape Leaders.</span>
             </h1>
-            <p style={{ fontSize: 16, color: "#555", lineHeight: 1.75, maxWidth: 440, margin: "0 0 28px" }}>
-              The North & South Debate Club of Chittagong (NDFCTG) has been nurturing
-              the next generation of critical thinkers, communicators, and leaders
-              since 2010. We believe every great idea deserves a great voice.
+            <p
+              style={{
+                fontSize: 16,
+                color: "#555",
+                lineHeight: 1.75,
+                maxWidth: 440,
+                margin: "0 0 28px",
+              }}
+            >
+              National Debate Federation, Chattogram (NDFCTG) has been nurturing
+              the next generation of critical thinkers, communicators, and
+              leaders since 2010. We believe every great idea deserves a great
+              voice.
             </p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <a
@@ -328,150 +349,305 @@ export default function About() {
           <div className="hero-visual quote-block">
             <p
               className="fraunces-italic"
-              style={{ fontSize: "clamp(18px,2.5vw,24px)", color: "#1A3A2A", lineHeight: 1.5, margin: "0 0 20px", position: "relative", zIndex: 1 }}
+              style={{
+                fontSize: "clamp(18px,2.5vw,24px)",
+                color: "#1A3A2A",
+                lineHeight: 1.5,
+                margin: "0 0 20px",
+                position: "relative",
+                zIndex: 1,
+              }}
             >
-              "The art of debate is not to win an argument — it is to discover truth together."
+              "The art of debate is not to win an argument — it is to discover
+              truth together."
             </p>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg,#006A4E,#1A3A2A)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16, fontFamily: "'Fraunces',serif" }}>F</div>
-              <div>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111" }}>Jewel Chowdhury</p>
-                <p style={{ margin: 0, fontSize: 12, color: "#888" }}>President</p>
-              </div>
-            </div>
-            {/* decorative dots */}
-            <div style={{ position: "absolute", bottom: 20, right: 20, display: "grid", gridTemplateColumns: "repeat(4,8px)", gap: 6 }}>
-              {[...Array(12)].map((_, i) => (
-                <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(0,106,78,0.15)" }} />
-              ))}
-            </div>
-          </div>
-        </div>
+            <div style={{ display: "", alignItems: "center", gap: 12 }}>
+              <img
+                src={team[0].image}
+                alt={team[0].name}
+                style={{
+                  width: 140,
+                  height: 140,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
+              />
 
-        {/* ── STATS BAND ───────────────────────────────── */}
-        <div className="section">
-          <div className="stat-band">
-            {[
-              { n: "500+", l: "Active Members" },
-              { n: "14", l: "Years Running" },
-              { n: "80+", l: "Tournaments" },
-              { n: "12", l: "National Titles" },
-            ].map((s) => (
-              <div key={s.l}>
-                <div className="stat-num">{s.n}</div>
-                <div className="stat-lbl">{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── PILLARS ──────────────────────────────────── */}
-        <div className="section">
-          <p className="section-label">What We Stand For</p>
-          <h2 className="fraunces section-title">Our Core Pillars</h2>
-          <div className="pillars-grid">
-            {pillars.map((p, i) => (
-              <div key={p.title} className="pillar-card" style={{ animationDelay: `${i * 0.08}s` }}>
-                <div style={{ fontSize: 32, marginBottom: 14 }}>{p.icon}</div>
-                <h3 className="fraunces" style={{ fontSize: 18, color: "#111", margin: "0 0 10px" }}>{p.title}</h3>
-                <p style={{ fontSize: 14, color: "#555", lineHeight: 1.65, margin: 0 }}>{p.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── MISSION / VISION ─────────────────────────── */}
-        <div className="section">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            {[
-              {
-                label: "Our Mission",
-                icon: "🎯",
-                text: "To foster a culture of intellectual curiosity and respectful discourse in Chittagong by providing world-class debate training, accessible to students from all backgrounds.",
-                accent: "#006A4E",
-              },
-              {
-                label: "Our Vision",
-                icon: "🌟",
-                text: "A Bangladesh where every young person has the confidence to articulate ideas, challenge assumptions, and contribute meaningfully to civic life — starting here in Chittagong.",
-                accent: "#D42027",
-              },
-            ].map((item) => (
-              <div key={item.label} className="card" style={{ padding: "32px 28px" }}>
-                <div style={{ fontSize: 28, marginBottom: 14 }}>{item.icon}</div>
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: item.accent, margin: "0 0 10px" }}>{item.label}</p>
-                <p style={{ fontSize: 15, color: "#444", lineHeight: 1.7, margin: 0 }}>{item.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── TIMELINE ─────────────────────────────────── */}
-        <div className="section">
-          <p className="section-label">Our Journey</p>
-          <h2 className="fraunces section-title">A Decade of Debate</h2>
-          <div style={{ maxWidth: 600 }}>
-            <div className="timeline">
-              {timeline.map((t, i) => (
-                <div key={t.year} className="tl-item" style={{ animationDelay: `${i * 0.07}s` }}>
-                  <div className="tl-dot" />
-                  <p className="tl-year">{t.year}</p>
-                  <p className="tl-text">{t.event}</p>
-                </div>
-              ))}
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#111",
+                  paddingLeft: 12,
+                }}
+              >
+                Jewel Chowdhury
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  color: "#888",
+                  paddingLeft: 12,
+                }}
+              >
+                President
+              </p>
             </div>
           </div>
+          {/* decorative dots */}
         </div>
+      </div>
 
-        {/* ── TEAM ─────────────────────────────────────── */}
-        <div className="section">
-          <p className="section-label">The People Behind It</p>
-          <h2 className="fraunces section-title">Current Leadership</h2>
-          <div className="team-grid">
-            {team.map((m, i) => (
-              <div key={m.name} className="team-card" style={{ animationDelay: `${i * 0.06}s` }}>
-                <div className="team-avatar">{m.initial}</div>
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#111", margin: "0 0 4px" }}>{m.name}</p>
-                <p style={{ fontSize: 12, color: "#888", margin: 0 }}>{m.role}</p>
+      {/* ── STATS BAND ───────────────────────────────── */}
+      <div className="section">
+        <div className="stat-band">
+          {[
+            { n: "500+", l: "Active Members" },
+            { n: "14", l: "Years Running" },
+            { n: "80+", l: "Tournaments" },
+            { n: "12", l: "National Titles" },
+          ].map((s) => (
+            <div key={s.l}>
+              <div className="stat-num">{s.n}</div>
+              <div className="stat-lbl">{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── PILLARS ──────────────────────────────────── */}
+      <div className="section">
+        <p className="section-label">What We Stand For</p>
+        <h2 className="fraunces section-title">Our Core Pillars</h2>
+        <div className="pillars-grid">
+          {pillars.map((p, i) => (
+            <div
+              key={p.title}
+              className="pillar-card"
+              style={{ animationDelay: `${i * 0.08}s` }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 14 }}>{p.icon}</div>
+              <h3
+                className="fraunces"
+                style={{ fontSize: 18, color: "#111", margin: "0 0 10px" }}
+              >
+                {p.title}
+              </h3>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "#555",
+                  lineHeight: 1.65,
+                  margin: 0,
+                }}
+              >
+                {p.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── MISSION / VISION ─────────────────────────── */}
+      <div className="section">
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}
+        >
+          {[
+            {
+              label: "Our Mission",
+              icon: "🎯",
+              text: "To foster a culture of intellectual curiosity and respectful discourse in Chittagong by providing world-class debate training, accessible to students from all backgrounds.",
+              accent: "#006A4E",
+            },
+            {
+              label: "Our Vision",
+              icon: "🌟",
+              text: "A Bangladesh where every young person has the confidence to articulate ideas, challenge assumptions, and contribute meaningfully to civic life — starting here in Chittagong.",
+              accent: "#D42027",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="card"
+              style={{ padding: "32px 28px" }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 14 }}>{item.icon}</div>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  color: item.accent,
+                  margin: "0 0 10px",
+                }}
+              >
+                {item.label}
+              </p>
+              <p
+                style={{
+                  fontSize: 15,
+                  color: "#444",
+                  lineHeight: 1.7,
+                  margin: 0,
+                }}
+              >
+                {item.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── TIMELINE ─────────────────────────────────── */}
+      <div className="section">
+        <p className="section-label">Our Journey</p>
+        <h2 className="fraunces section-title">A Decade of Debate</h2>
+        <div style={{ maxWidth: 600 }}>
+          <div className="timeline">
+            {timeline.map((t, i) => (
+              <div
+                key={t.year}
+                className="tl-item"
+                style={{ animationDelay: `${i * 0.07}s` }}
+              >
+                <div className="tl-dot" />
+                <p className="tl-year">{t.year}</p>
+                <p className="tl-text">{t.event}</p>
               </div>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* ── JOIN CTA ──────────────────────────────────── */}
-        <div className="section">
-          <div
-            className="card"
+      {/* ── TEAM ─────────────────────────────────────── */}
+      <div className="section">
+        <p className="section-label">The People Behind It</p>
+        <h2 className="fraunces section-title">Current Leadership</h2>
+        <div className="team-grid">
+          {team.map((m, i) => (
+            <div
+              key={m.name}
+              className="team-card"
+              style={{ animationDelay: `${i * 0.06}s` }}
+            >
+              <div className="team-avatar">
+                {" "}
+                <img
+                  src={m.image}
+                  alt={m.name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    borderRadius: "50%",
+                  }}
+                />
+              </div>
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#111",
+                  margin: "0 0 4px",
+                }}
+              >
+                {m.name}
+              </p>
+              <p style={{ fontSize: 12, color: "#888", margin: 0 }}>{m.role}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── JOIN CTA ──────────────────────────────────── */}
+      <div className="section">
+        <div
+          className="card"
+          style={{
+            padding: "clamp(32px,6vw,56px)",
+            textAlign: "center",
+            background:
+              "linear-gradient(135deg,rgba(0,106,78,0.04),rgba(238,245,241,0.8))",
+          }}
+        >
+          <p
             style={{
-              padding: "clamp(32px,6vw,56px)",
-              textAlign: "center",
-              background: "linear-gradient(135deg,rgba(0,106,78,0.04),rgba(238,245,241,0.8))",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+              color: "#006A4E",
+              marginBottom: 12,
             }}
           >
-            <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#006A4E", marginBottom: 12 }}>Join Us</p>
-            <h2 className="fraunces" style={{ fontSize: "clamp(24px,4vw,38px)", color: "#111", margin: "0 0 16px", lineHeight: 1.2 }}>
-              Ready to Find Your Voice?
-            </h2>
-            <p style={{ fontSize: 16, color: "#555", maxWidth: 480, margin: "0 auto 28px", lineHeight: 1.7 }}>
-              Whether you're a seasoned debater or stepping onto the floor for the first time — NDFCTG is your home.
-            </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <a
-                href="/signup"
-                style={{ padding: "13px 28px", background: "#006A4E", color: "#fff", borderRadius: 11, textDecoration: "none", fontSize: 15, fontWeight: 600 }}
-              >
-                Become a Member
-              </a>
-              <a
-                href="/contact"
-                style={{ padding: "13px 24px", background: "transparent", color: "#006A4E", border: "1.5px solid #006A4E", borderRadius: 11, textDecoration: "none", fontSize: 15, fontWeight: 600 }}
-              >
-                Ask Us Anything
-              </a>
-            </div>
+            Join Us
+          </p>
+          <h2
+            className="fraunces"
+            style={{
+              fontSize: "clamp(24px,4vw,38px)",
+              color: "#111",
+              margin: "0 0 16px",
+              lineHeight: 1.2,
+            }}
+          >
+            Ready to Find Your Voice?
+          </h2>
+          <p
+            style={{
+              fontSize: 16,
+              color: "#555",
+              maxWidth: 480,
+              margin: "0 auto 28px",
+              lineHeight: 1.7,
+            }}
+          >
+            Whether you're a seasoned debater or stepping onto the floor for the
+            first time — NDFCTG is your home.
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              justifyContent: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <a
+              href="/signup"
+              style={{
+                padding: "13px 28px",
+                background: "#006A4E",
+                color: "#fff",
+                borderRadius: 11,
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+              }}
+            >
+              Become a Member
+            </a>
+            <a
+              href="/contact"
+              style={{
+                padding: "13px 24px",
+                background: "transparent",
+                color: "#006A4E",
+                border: "1.5px solid #006A4E",
+                borderRadius: 11,
+                textDecoration: "none",
+                fontSize: 15,
+                fontWeight: 600,
+              }}
+            >
+              Ask Us Anything
+            </a>
           </div>
         </div>
-
       </div>
     </>
   );
